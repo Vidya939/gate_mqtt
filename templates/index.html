@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gate Dashboard</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+<style>
+    body { background: linear-gradient(135deg,#e0f7fa,#b2ebf2); font-family: 'Segoe UI', sans-serif; }
+    .navbar { background: #004080; padding: 0.5rem 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .navbar-brand img { height: 50px; margin-right:10px; }
+    .nav-link { color:#fff; font-weight:600; margin: 0 1.5rem; transition: color 0.3s; }
+    .nav-link:hover { color:#ffc107; }
+
+    .card {
+      border-radius:1rem;
+      box-shadow:0 6px 15px rgba(0,0,0,0.1);
+      text-align: center;
+      min-height: 120px;
+      padding: 15px;
+    }
+
+    .card h6 { font-weight:600; color:#333; display:flex; align-items:center; justify-content:center; font-size: 1rem; }
+    .card h6 i { margin-right:8px; }
+    .display-6 { font-size:1.8rem; font-weight:700; }
+    
+    /* Card colors */
+    .status-card { background: linear-gradient(135deg,#2196f3,#21cbf3); color:#fff; }
+    .opens-card { background: linear-gradient(135deg,#28a745,#7ee08e); color:#fff; }
+    .closes-card { background: linear-gradient(135deg,#dc3545,#ff7b7b); color:#fff; }
+    .duration-card { background: linear-gradient(135deg,#ffc107,#ffe680); color:#333; }
+    .sms-card { background: linear-gradient(135deg,#9c27b0,#d05ce3); color:#fff; display:flex; flex-direction:column; justify-content:center; }
+
+    canvas {
+      background:#fff;
+      border-radius:1rem;
+      padding:10px;
+      box-shadow:0 4px 12px rgba(0,0,0,0.05);
+      height: 350px !important;
+    }
+
+    .history-card input, .history-card button { border-radius:0.5rem; }
+
+    /* shift select */
+    .shift-select { min-width: 200px; }
+  </style>
+</head>
+
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg">
+    <a class="navbar-brand d-flex align-items-center" href="/"><img src="static/logo1.png" alt="Logo"></a>
+    <button class="navbar-toggler text-white" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon" style="background-color: #fff;"></span>
+    </button>
+    <div class="collapse navbar-collapse justify-content-start" id="navbarNav">
+      <ul class="navbar-nav">
+        <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+        <li class="nav-item"><a class="nav-link" href="/live">Live</a></li>
+        <li class="nav-item"><a class="nav-link" href="/history">History</a></li>
+      </ul>
+    </div>
+
+    <!-- Shift selector in navbar -->
+    <div class="ms-auto d-flex align-items-center">
+      <select id="shiftSelect" class="form-select shift-select me-3">
+        <option value="1">Shift 1 — 10:00 to 18:00</option>
+        <option value="2">Shift 2 — 18:00 to 02:00</option>
+        <option value="3">Shift 3 — 02:00 to 10:00</option>
+      </select>
+      <span id="todayDate-lg" class="text-white ms-auto fw-bold me-2"></span>
+    </div>
+  </nav>
+
+  <div class="container-fluid mt-4">
+    {% if page == "home" %}
+    <div class="row justify-content-center">
+      <div class="col-lg-6">
+        <div class="card status-card">
+          <h6><i class="fa-solid fa-gauge-high"></i>Current Status</h6>
+          <div id="home-status" class="display-5 fw-bold">—</div>
+          <small id="home-duration" class="fw-bold">Duration —</small>
+        </div>
+      </div>
+    </div>
+
+    {% elif page == "live" %}
+    <!-- All cards in one row on large screens -->
+    <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-lg-5 text-center">
+      <div class="col"><div class="card status-card"><h6><i class="fa-solid fa-gate"></i>Gate Status</h6><div id="live-state" class="display-6">—</div></div></div>
+      <div class="col"><div class="card opens-card"><h6><i class="fa-solid fa-door-open"></i>Total Opens</h6><div id="opens-today" class="display-6">0</div></div></div>
+      <div class="col"><div class="card closes-card"><h6><i class="fa-solid fa-door-closed"></i>Total Closes</h6><div id="closes-today" class="display-6">0</div></div></div>
+      <div class="col"><div class="card duration-card"><h6><i class="fa-solid fa-clock"></i>Avg Open Duration</h6><div id="avg-open" class="display-6">0s</div></div></div>
+      <div class="col"><div class="card sms-card"><h6><i class="fa-solid fa-bell"></i>SMS Alerts</h6>
+        <p style="font-size:1.2rem; margin-bottom:5px;"><strong>Open:</strong> <span id="sms-open">0</span></p>
+        <p style="font-size:1.2rem; margin-bottom:0;"><strong>Close:</strong> <span id="sms-close">0</span></p>
+      </div></div>
+    </div>
+
+    <!-- Currently selected shift label -->
+    <div class="row mt-3">
+      <div class="col-12 text-end">
+        <small class="text-muted">Showing data for: <strong id="shiftLabel">Shift 1 (10:00-18:00)</strong> — <span id="shiftWindow"></span></small>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-3 mt-1">
+      <div class="col-lg-6"><div class="card"><h6><i class="fa-solid fa-chart-line"></i>Max Open Duration (per hour)</h6><canvas id="lineChart"></canvas></div></div>
+      <div class="col-lg-6"><div class="card"><h6><i class="fa-solid fa-chart-bar"></i>Hourly Opens vs Closes</h6><canvas id="barChart"></canvas></div></div>
+    </div>
+
+    <!-- Recent events -->
+    <div class="row mt-3">
+      <div class="col-lg-6">
+        <div class="card">
+          <h6><i class="fa-solid fa-list"></i>Recent Events (Shift)</h6>
+          <ul id="recent-events" class="list-group list-group-flush"></ul>
+        </div>
+      </div>
+    </div>
+
+    {% elif page == "history" %}
+    <div class="card p-3 mb-3 history-card">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label fw-bold">From Date</label>
+          <input id="fromDate" type="date" class="form-control" />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-bold">To Date</label>
+          <input id="toDate" type="date" class="form-control" />
+        </div>
+        <div class="col-md-2">
+          <button id="generateBtn" class="btn btn-primary w-100 fw-bold">Generate</button>
+        </div>
+      </div>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-6"><div class="card"><h6><i class="fa-solid fa-chart-area"></i>Aggregates</h6><canvas id="historyChart"></canvas></div></div>
+      <div class="col-md-6"><div class="card"><h6><i class="fa-solid fa-list-check"></i>Events</h6><table class="table table-sm"><thead><tr><th>Timestamp</th><th>Status</th></tr></thead><tbody id="history-rows"></tbody></table></div></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <script>
+    document.getElementById("todayDate-lg").innerText = new Date().toLocaleDateString();
+
+    function animateCounter(id, value) {
+      let el = document.getElementById(id);
+      let current = parseInt(el.innerText) || 0;
+      let target = Math.round(value);
+      let increment = (target - current) / 20;
+      let step = 0;
+      function update() {
+        if (step < 20) { current += increment; el.innerText = Math.round(current); step++; requestAnimationFrame(update); }
+        else { el.innerText = target; }
+      }
+      update();
+    }
+
+    {% if page == "home" %}
+    function fetchHomeData() {
+      fetch("/api/live").then(r=>r.json()).then(d=>{
+        document.getElementById("home-status").innerText=d.latest.gate_status;
+        document.getElementById("home-duration").innerText="Duration "+d.latest.duration+"s";
+      });
+    }
+    setInterval(fetchHomeData,3000); fetchHomeData();
+
+    {% elif page == "live" %}
+    let lineChart, barChart;
+    let selectedShift = document.getElementById("shiftSelect").value || "1";
+
+    function initCharts() {
+      lineChart=new Chart(document.getElementById("lineChart"),{
+        type:"line",
+        data:{labels:[],datasets:[{label:"Max Open Duration (s)",data:[],borderColor:"#ff5733",fill:false}]},
+        options:{interaction:{mode:'index',intersect:false},plugins:{legend:{display:true}}}
+      });
+      barChart=new Chart(document.getElementById("barChart"),{
+        type:"bar",
+        data:{labels:[],datasets:[
+          {label:"Opens",data:[],backgroundColor:"#007bff"},
+          {label:"Closes",data:[],backgroundColor:"#28a745"}
+        ]},
+        options:{scales:{x:{stacked:false},y:{beginAtZero:true}}}
+      });
+    }
+    initCharts();
+
+    function hoursLabelsFromHourly(hourly) {
+      // Returns formatted labels like "18:00", "19:00", "00:00"
+      return hourly.map(x => (x.hr.toString().padStart(2,'0') + ":00"));
+    }
+
+    function updateRecentEvents(events){
+      const ul = document.getElementById("recent-events");
+      ul.innerHTML = "";
+      if(!events || events.length===0){
+        ul.innerHTML = "<li class='list-group-item'>No events in selected shift</li>";
+        return;
+      }
+      events.slice().reverse().forEach(ev=>{
+        const li = document.createElement("li");
+        li.className = "list-group-item";
+        li.innerHTML = `<strong>${new Date(ev.timestamp).toLocaleString()}</strong> — <span class="fw-bold">${ev.gate_status}</span>`;
+        ul.appendChild(li);
+      });
+    }
+
+    function fetchLiveData() {
+      fetch(`/api/live?shift=${selectedShift}`).then(r=>r.json()).then(d=>{
+        document.getElementById("live-state").innerText=d.latest.gate_status;
+        animateCounter("opens-today", d.opens_shift || 0);
+        animateCounter("closes-today", d.closes_shift || 0);
+        document.getElementById("avg-open").innerText=(d.avg_open_duration || 0) + "s";
+        document.getElementById("sms-open").innerText=d.sms_open;
+        document.getElementById("sms-close").innerText=d.sms_close;
+
+        document.getElementById("shiftLabel").innerText = d.shift_label || "Shift";
+        document.getElementById("shiftWindow").innerText = `${new Date(d.shift_start).toLocaleString()} — ${new Date(d.shift_end).toLocaleString()}`;
+
+        // charts
+        const labels = hoursLabelsFromHourly(d.hourly);
+        lineChart.data.labels = labels;
+        lineChart.data.datasets[0].data = d.hourly.map(x=>x.max_open_duration || 0);
+        lineChart.update();
+
+        barChart.data.labels = labels;
+        barChart.data.datasets[0].data = d.hourly.map(x=>x.opens || 0);
+        barChart.data.datasets[1].data = d.hourly.map(x=>x.closes || 0);
+        barChart.update();
+
+        // recent events
+        updateRecentEvents(d.recent_events);
+      }).catch(err=>{
+        console.error("Fetch live error", err);
+      });
+    }
+
+    // shift select change handler
+    document.getElementById("shiftSelect").addEventListener("change", (e)=>{
+      selectedShift = e.target.value;
+      // immediate refresh
+      fetchLiveData();
+    });
+
+    // Polling
+    setInterval(fetchLiveData, 3000);
+    fetchLiveData();
+
+    {% elif page == "history" %}
+    let histChart;
+    document.getElementById("generateBtn").addEventListener("click",()=>{
+      let from=document.getElementById("fromDate").value;
+      let to=document.getElementById("toDate").value;
+      if(!from||!to){alert("Select both From and To dates");return;}
+      fetch(`/api/history?from=${from}&to=${to}`).then(r=>r.json()).then(d=>{
+        let tbody=document.getElementById("history-rows");tbody.innerHTML="";
+        d.rows.forEach(r=>{
+          let tr=document.createElement("tr");
+          tr.innerHTML=`<td>${r.timestamp}</td><td>${r.gate_status}</td>`;
+          tbody.appendChild(tr);
+        });
+        let ctx=document.getElementById("historyChart");
+        if(histChart) histChart.destroy();
+        histChart=new Chart(ctx,{type:"line",data:{
+          labels:d.aggregates.map(x=>x.dt),
+          datasets:[
+            {label:"Opens",data:d.aggregates.map(x=>x.opens),borderColor:"#007bff",fill:false},
+            {label:"Closes",data:d.aggregates.map(x=>x.closes),borderColor:"#28a745",fill:false}
+          ]
+        }});
+      });
+    });
+    {% endif %}
+  </script>
+</body>
+</html>
